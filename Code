@@ -1,0 +1,74 @@
+import requests
+import json
+import pandas as pd
+from google.colab import files
+
+# API Key (If can be done in a txt file)
+API_Key = "AIzaSyFTALaJso-Sig-tQSbXGO2M29HbdoqwVtg"
+#read excel
+filename = "/content/BNA - MQY1 Commute.xlsx"
+df = pd.read_excel(filename)
+# base URL
+url = "https://maps.googleapis.com/maps/api/directions/json?origin={Origin}&destination={Destination}&key={api_key}&mode={Mode}"
+car_minutes = None
+car_miles = None
+transit_minutes = None
+transit_miles = None
+
+list(df.columns)
+df['LOCATION AND ZIP'] = df['Location - variant'] + " " + df['zip code - variant'].astype(str)
+
+df.head()
+
+# row number
+count = 0
+# stop after limit iterations
+limit = len(df) + 1
+num1 = 60 
+num2 = 1607.42029
+for index, row in df.iterrows():
+  car_minutes = None
+  car_miles = None
+  r_car = None
+  r_transit = None
+  car_json = None
+  transit_json = None
+  origin_location = row['Location - original']
+  destination_location = row['LOCATION AND ZIP']
+  # Get a response
+  r_car = requests.get(url.format(Origin = origin_location ,Destination = destination_location , api_key = API_Key ,Mode = "car",optimize_wayoints=True))
+  r_transit = requests.get(url.format(Origin = origin_location ,Destination = destination_location , api_key = API_Key ,Mode = "transit"))
+  # Car
+  car_json = r_car.json()
+  if car_json['status'] == 'OK':
+    # get Car Commute (minutes) and Updated Distance
+    car_minutes = car_json['routes'][0]['legs'][0]['duration']['value']/num1 #need to devide by 60 to get minutes
+    car_miles = car_json['routes'][0]['legs'][0]['distance']['value']/num2 #need to devide by 1607.42029 meters
+    # set Car Commute (minutes) and Updated Distance
+    df.loc[count,'Car Commute (minutes)'] = round(car_minutes)
+    df.loc[count,'Updated Distance Car (miles)'] = round(car_miles,1)
+  # Transit
+  transit_json = r_transit.json()
+  if transit_json['status'] == 'OK':
+    # get transit Commute (minutes) and Updated Distance
+    transit_minutes = transit_json['routes'][0]['legs'][0]['duration']['value']/num1 #need to devide by 60 to get minutes
+    transit_miles = transit_json['routes'][0]['legs'][0]['distance']['value']/num2 #need to devide by 1607.42029 meters
+    # set transit Commute (minutes) and Updated Distance
+    df.loc[count,'Updated Distance Transit (miles)'] = round(transit_miles,1)
+    df.loc[count,'Transit Commute (minutes)'] = round(transit_minutes)
+  # check if ferry included
+  if len(car_json['routes']) !=0:
+    for item in car_json['routes'][0]['legs'][0]['steps']:
+      if 'Ferry' in item['html_instructions']:
+        df.loc[count,'IsFerry?'] = 'Yes'
+  # stop For loop after 'limit' iterations
+  count +=1
+  if count == limit:
+    break
+    
+df.head()
+
+#this line save the new df into the existing excel
+df.to_excel(filename)
+
+filename = "/content/XXX.xlsx"
